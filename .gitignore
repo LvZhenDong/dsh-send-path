@@ -1,0 +1,5 @@
+node_modules/
+*.log
+resolver.pid
+*.bak
+.DS_Store
