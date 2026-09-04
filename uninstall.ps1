@@ -1,4 +1,4 @@
-# dsh-send-path uninstaller — removes the menu entries, the autostart entry,
+﻿# dsh-send-path uninstaller — removes the menu entries, the autostart entry,
 # stops the resolver, and restores the original DSH bundle.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path

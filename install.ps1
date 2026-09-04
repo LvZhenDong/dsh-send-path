@@ -1,4 +1,4 @@
-# dsh-send-path installer — sends the right-clicked file/folder's absolute path
+﻿# dsh-send-path installer — sends the right-clicked file/folder's absolute path
 # into the open DeepSeek Harness dialog (press F while the menu is open).
 # No admin required: everything lives under HKCU and the user profile.
 param(
