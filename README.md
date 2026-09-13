@@ -76,7 +76,7 @@ Then: **restart Explorer** once, right-click any file/folder, press `F` while th
 
 ```
 src/resolver.mjs          loopback service: /insert, /events (SSE), /health
-src/send-path.vbs         context-menu bridge (POSTs the exact path; auto-starts the resolver and retries if it is down, never shows a dialog)
+src/send-path.vbs         context-menu bridge (POSTs the exact path; if the service is down it starts it, waits for /health, then inserts once — never shows a dialog)
 src/start-resolver.vbs     hidden autostart launcher (portable node lookup)
 src/stop-resolver.cmd      manual stop
 src/dsh-menu.ico           menu icon

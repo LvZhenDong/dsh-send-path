@@ -37,7 +37,42 @@ const waitFor = async (expr, label, timeoutMs = 45000) => {
   throw new Error('timeout: ' + label + ' last=' + JSON.stringify(last))
 }
 await send('Runtime.enable')
-await waitFor(`!!document.querySelector('textarea[data-phase]')`, 'composer')
+
+// Close cleanly: closing the WebSocket and exiting in the same tick trips a
+// libuv assertion on Windows, so give the close a moment to settle.
+const finish = async (code) => {
+  try { ws.close() } catch { /* already closed */ }
+  try { edge.kill() } catch { /* already gone */ }
+  await sleep(300)
+  process.exit(code)
+}
+
+// DSH may require browser authentication: a fresh, cookie-less browser then
+// gets 401 on the index and never renders a composer. Detect that up front and
+// skip with a clear message instead of dying on a timeout.
+const GUI_URL = 'http://127.0.0.1:3080/'
+let guiStatus = 0
+try { guiStatus = (await fetch(GUI_URL)).status } catch { guiStatus = 0 }
+if (guiStatus === 401) {
+  console.log('SKIP: the DSH GUI requires browser authentication (index answers 401).')
+  console.log('      Open http://127.0.0.1:3080 in your logged-in browser and exercise the')
+  console.log('      right-click menu there; this headless test cannot hold the session cookie.')
+  await finish(0)
+}
+if (guiStatus === 0) {
+  console.log('SKIP: no DSH web server on http://127.0.0.1:3080 (start it with: dsh web).')
+  await finish(0)
+}
+
+try {
+  await waitFor(`!!document.querySelector('textarea[data-phase]')`, 'composer', 30000)
+} catch (error) {
+  console.log('FAIL: no composer rendered in the headless page (' + error.message + ').')
+  console.log('      If the GUI normally requires a login step, that is the likely cause;')
+  console.log('      the resolver/insert path itself can still be checked after opening the')
+  console.log('      GUI in your browser.')
+  await finish(1)
+}
 
 // Give the page's EventSource a moment to connect, then POST like the VBS does.
 await sleep(1500)
@@ -50,4 +85,4 @@ const value = await evalJS(`document.querySelector('textarea[data-phase]').value
 console.log('composer value:', JSON.stringify(value))
 const ok = typeof value === 'string' && value.trim() === absPath
 console.log(ok ? 'E2E MENU PASS' : 'E2E MENU FAIL')
-ws.close(); edge.kill(); process.exit(ok ? 0 : 1)
+await finish(ok ? 0 : 1)
