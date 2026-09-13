@@ -41,14 +41,18 @@ function candidatePaths() {
   })
 }
 
-const MARKER = 'window.__dshDropPathSource'
+// Idempotency marker: a distinctive token injected verbatim as a comment at the
+// top of the block. Checked literally, so it can never drift from what is
+// injected (an earlier version derived the flag name with a slice() and was
+// off by one, which made every re-run patch the bundle again).
+const MARKER = 'dsh-send-path:v1'
 const ANCHOR_PRIMARY = '//#region lib/types/client/ComposerAttachments.js'
 const ANCHOR_FALLBACK = 'function ComposerAttachments('
 const BACKUP_SUFFIX = '.dsh-send-path.bak'
 
 // The injected module-level block (2-tab indent, matching the bundle's own
 // style inside the plugin factory). References nothing outside itself.
-const BLOCK = `\t\t/** dsh-send-path: Explorer context-menu insert channel.
+const BLOCK = `\t\t/** ${MARKER} — Explorer context-menu insert channel.
 \t\t* Paths pushed by the drop-resolver's /events SSE stream are inserted
 \t\t* into the composer. First hello skips the history replay; a reconnect
 \t\t* only inserts frames newer than lastSeq. */
@@ -92,11 +96,11 @@ const BLOCK = `\t\t/** dsh-send-path: Explorer context-menu insert channel.
 \t\t\t\tdocument.execCommand("insertText", false, text);
 \t\t\t}
 \t\t};
-\t\tif (typeof window !== "undefined" && typeof EventSource !== "undefined" && window.${MARKER.slice(8)} === void 0) {
+\t\tif (typeof window !== "undefined" && typeof EventSource !== "undefined" && window.__dshDropPathSource === void 0) {
 \t\t\tlet lastSeq = 0;
 \t\t\tlet initialized = false;
-\t\t\twindow.${MARKER.slice(8)} = new EventSource(\`\${RESOLVER_URL}/events\`);
-\t\t\twindow.${MARKER.slice(8)}.addEventListener("hello", (event) => {
+\t\t\twindow.__dshDropPathSource = new EventSource(\`\${RESOLVER_URL}/events\`);
+\t\t\twindow.__dshDropPathSource.addEventListener("hello", (event) => {
 \t\t\t\ttry {
 \t\t\t\t\tconst data = JSON.parse(event.data);
 \t\t\t\t\tif (typeof data.seq === "number") {
@@ -104,7 +108,7 @@ const BLOCK = `\t\t/** dsh-send-path: Explorer context-menu insert channel.
 \t\t\t\t\t}
 \t\t\t\t} catch (error) { /* ignore malformed frame */ }
 \t\t\t});
-\t\t\twindow.${MARKER.slice(8)}.addEventListener("insert", (event) => {
+\t\t\twindow.__dshDropPathSource.addEventListener("insert", (event) => {
 \t\t\t\ttry {
 \t\t\t\t\tconst data = JSON.parse(event.data);
 \t\t\t\t\tif (data === null || typeof data.seq !== "number" || data.seq <= lastSeq) return;
@@ -167,7 +171,11 @@ function main() {
     console.error(`[dsh-send-path] Cannot read ${file}: ${error.message}`)
     process.exit(1)
   }
-  if (source.includes(MARKER)) {
+  // Any of these means a patch (current or an older revision) is already in
+  // place: patching again would add a second listener and insert each path
+  // twice, so bail out.
+  const ALREADY = [MARKER, 'dsh-send-path: Explorer context-menu insert channel', '__dshDropPathSource', '_dshDropPathSource', 'insertDroppedPaths']
+  if (ALREADY.some(token => source.includes(token))) {
     console.log(`[dsh-send-path] Already patched (${label}): ${file}`)
     return
   }

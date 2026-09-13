@@ -13,20 +13,63 @@
  * zero dependencies. No dialogs are ever opened by this service.
  */
 import http from 'node:http'
-import { appendFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const PORT = Number(process.env.DSH_RESOLVER_PORT ?? 3081)
 const HOST = '127.0.0.1'
 const HOME = os.homedir()
 const LOG = path.join(HOME, '.dsh', 'drop-resolver', 'resolver.log')
 const PID_FILE = path.join(HOME, '.dsh', 'drop-resolver', 'resolver.pid')
+const SRC_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 function log(line) {
   const stamp = new Date().toISOString()
   try { appendFileSync(LOG, `[${stamp}] ${line}\n`) } catch { /* best effort */ }
 }
+
+// --- keep the DSH web bundle patched across DSH updates ---
+// A DSH update replaces the ui-attachment client bundle and silently drops the
+// insert listener. This watches for that and re-applies the patch on its own,
+// so right-click keeps working after an upgrade without re-running install.
+const PATCH_MARKER = 'dsh-send-path:v1'
+const PATCH_SCRIPT = path.join(SRC_DIR, '..', 'tools', 'patch-dsh-bundle.mjs')
+const BUNDLE_CANDIDATES = [
+  path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-client-ui-attachment', 'lib', 'client.js'),
+  path.join(HOME, '.dsh', 'node_modules', '@deepseek-ai', 'dsh-client-ui-attachment', 'lib', 'client.js'),
+  path.join(HOME, '.dsh', 'profiles', 'web', 'node_modules', '@deepseek-ai', 'dsh-client-ui-attachment', 'lib', 'client.js'),
+]
+let lastPatchAttempt = 0
+
+function bundleLooksUnpatched() {
+  for (const file of BUNDLE_CANDIDATES) {
+    if (!existsSync(file)) continue
+    try {
+      if (!readFileSync(file, 'utf8').includes(PATCH_MARKER)) return true
+    } catch { /* unreadable: leave it alone */ }
+  }
+  return false
+}
+
+function ensureBundlePatched() {
+  if (!existsSync(PATCH_SCRIPT)) return
+  if (!bundleLooksUnpatched()) return
+  if (Date.now() - lastPatchAttempt < 30_000) return   // throttle re-apply attempts
+  lastPatchAttempt = Date.now()
+  try {
+    spawn(process.execPath, [PATCH_SCRIPT], { detached: true, stdio: 'ignore', windowsHide: true }).unref()
+    log('DSH bundle lost its patch (update?); re-applying via patch-dsh-bundle.mjs')
+  } catch (error) {
+    log(`bundle re-patch failed: ${String(error)}`)
+  }
+}
+
+setInterval(ensureBundlePatched, 60_000).unref()
+ensureBundlePatched()
+
 
 // --- external path insertion channel (Explorer context-menu bridge) ---
 const insertWaiters = new Set()
