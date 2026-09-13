@@ -68,7 +68,7 @@ Then: **restart Explorer** once, right-click any file/folder, press `F` while th
 ## 常见问题 / FAQ
 
 - **菜单里没出现该项**：重启资源管理器；确认 `install.cmd` 成功运行。
-- **按 F 没反应**：确认 DSH 页面开着（resolver 只把消息推给已连接的页面）；确认 resolver 在运行（`tasklist | findstr node`，或重跑安装）。
+- **按 F 没反应**：确认 DSH 页面开着（resolver 只把消息推给已连接的页面）。resolver 未运行时**右键脚本会自动拉起它并重试**，无需手动操作，也不会弹任何错误框。
 - **修补脚本找不到 bundle**：DSH 未安装或装在非常规位置——用 `node tools\patch-dsh-bundle.mjs --bundle <path\to\client.js>` 指定。
 - **DSH 更新后失效**：DSH 更新会覆盖 bundle，重跑 `install.cmd` 即可（幂等）。
 
@@ -76,8 +76,8 @@ Then: **restart Explorer** once, right-click any file/folder, press `F` while th
 
 ```
 src/resolver.mjs          loopback service: /insert, /events (SSE), /health
-src/send-path.vbs         context-menu bridge (POSTs the exact path)
-src/start-resolver.vbs     hidden autostart launcher
+src/send-path.vbs         context-menu bridge (POSTs the exact path; auto-starts the resolver and retries if it is down, never shows a dialog)
+src/start-resolver.vbs     hidden autostart launcher (portable node lookup)
 src/stop-resolver.cmd      manual stop
 src/dsh-menu.ico           menu icon
 tools/patch-dsh-bundle.mjs idempotent bundle patcher (+ --restore)
